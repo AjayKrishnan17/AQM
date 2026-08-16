@@ -358,10 +358,10 @@ function App() {
             <StatCard icon={Wind} iconColor="text-violet-500" value={displayValue(latest.pm10)} label="PM10 (µg/m³)" />
             <StatCard icon={Thermometer} iconColor="text-red-500" value={`${latest.temperature}°C`} label="Temperature" />
             <StatCard icon={Droplets} iconColor="text-sky-500" value={`${latest.humidity}%`} label="Humidity" />
-            <StatCard icon={Wind} iconColor="text-teal-500" value={displayValue(latest.co)} label="CO" />
-            <StatCard icon={CloudFog} iconColor="text-amber-500" value={displayValue(latest.no2)} label="NO₂" />
-            <StatCard icon={CloudFog} iconColor="text-yellow-600" value={displayValue(latest.so2)} label="SO₂" />
-            <StatCard icon={Wind} iconColor="text-blue-500" value={displayValue(latest.o3)} label="O₃" />
+            <StatCard icon={Wind} iconColor="text-teal-500" value={displayValue(latest.co)} label="CO (µg/m³)" />
+            <StatCard icon={CloudFog} iconColor="text-amber-500" value={displayValue(latest.no2)} label="NO₂ (µg/m³)" />
+            <StatCard icon={CloudFog} iconColor="text-yellow-600" value={displayValue(latest.so2)} label="SO₂ (µg/m³)" />
+            <StatCard icon={Wind} iconColor="text-blue-500" value={displayValue(latest.o3)} label="O₃ (µg/m³)" />
           </div>
         )}
 
