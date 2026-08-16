@@ -1,0 +1,12 @@
+{
+  "name": "aqm-root",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix Frontend run dev -- --host 0.0.0.0",
+    "build": "npm --prefix Frontend run build",
+    "lint": "npm --prefix Frontend run lint",
+    "preview": "npm --prefix Frontend run preview -- --host 0.0.0.0",
+    "backend": "npm --prefix Backend start"
+  }
+}
+
