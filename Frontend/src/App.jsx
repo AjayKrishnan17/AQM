@@ -73,7 +73,6 @@ const DEFAULT_STATUS_STYLE = {
   badge: "bg-gray-100 text-gray-600",
 };
 
-
 const SOURCE_META = {
   simulated: {
     icon: FlaskConical,
@@ -380,7 +379,7 @@ function App() {
                 <XAxis
                   dataKey="timestamp"
                   tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  interval={1}
+                  minTickGap={30}
                 />
                 <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} />
                 <Tooltip contentStyle={tooltipStyle} />
@@ -407,7 +406,7 @@ function App() {
                 <XAxis
                   dataKey="timestamp"
                   tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  interval={2}
+                  minTickGap={30}
                 />
                 <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} />
                 <Tooltip contentStyle={tooltipStyle} />
@@ -429,7 +428,7 @@ function App() {
                 <XAxis
                   dataKey="timestamp"
                   tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  interval={2}
+                  minTickGap={30}
                 />
                 <YAxis
                   yAxisId="left"
@@ -477,7 +476,7 @@ function App() {
                 <XAxis
                   dataKey="timestamp"
                   tick={{ fontSize: 10, fill: "#94a3b8" }}
-                  interval={1}
+                  minTickGap={30}
                 />
                 <YAxis
                   yAxisId="left"
