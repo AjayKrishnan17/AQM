@@ -64,11 +64,14 @@ const fetchLiveReading = async () => {
     ]);
     if (!airResponse.ok || !weatherResponse.ok) throw new Error("Open-Meteo request failed.");
     const [air, weather] = await Promise.all([airResponse.json(), weatherResponse.json()]);
-    const fullDate = new Date(air.current?.time || weather.current?.time || Date.now());
+    
+    const rawTime = air.current?.time || weather.current?.time || new Date().toISOString();
+    const fullDate = new Date(rawTime.endsWith("Z") || rawTime.includes("+") ? rawTime : rawTime + "+05:30");
+    
     const aqiValue = getOptionalNumber(air.current?.us_aqi);
     const aqi = aqiValue === null ? null : Math.round(aqiValue);
     return {
-      timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), fullDate, aqi,
+      timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }), fullDate, aqi,
       pm25: getOptionalNumber(air.current?.pm2_5), pm10: getOptionalNumber(air.current?.pm10),
       temperature: getOptionalNumber(weather.current?.temperature_2m), humidity: getOptionalNumber(weather.current?.relative_humidity_2m),
       co: getOptionalNumber(air.current?.carbon_monoxide), no2: getOptionalNumber(air.current?.nitrogen_dioxide),
@@ -98,7 +101,7 @@ const seedLiveHistoricalData = async () => {
     const timeArray = air.hourly.time;
     const nowMs = Date.now();
     
-    let currentIndex = timeArray.findIndex(t => new Date(t).getTime() > nowMs) - 1;
+    let currentIndex = timeArray.findIndex(t => new Date(t.endsWith("Z") || t.includes("+") ? t : t + "+05:30").getTime() > nowMs) - 1;
     if (currentIndex < 0) currentIndex = timeArray.length - 1;
 
     const dataToInsert = [];
@@ -106,12 +109,13 @@ const seedLiveHistoricalData = async () => {
       const idx = currentIndex - i;
       if (idx < 0) continue;
       
-      const fullDate = new Date(air.hourly.time[idx]);
+      const rawTime = air.hourly.time[idx];
+      const fullDate = new Date(rawTime.endsWith("Z") || rawTime.includes("+") ? rawTime : rawTime + "+05:30");
       const aqiValue = getOptionalNumber(air.hourly.us_aqi[idx]);
       const aqi = aqiValue === null ? null : Math.round(aqiValue);
       
       dataToInsert.push({
-        timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }),
         fullDate,
         aqi,
         pm25: getOptionalNumber(air.hourly.pm2_5[idx]),
@@ -138,7 +142,6 @@ const seedLiveHistoricalData = async () => {
 };
 
 const initializeData = async () => {
-  await SensorData.deleteMany({});
   const existingData = await SensorData.findOne();
 
   if (DATA_MODE === "live_api") {
@@ -149,7 +152,6 @@ const initializeData = async () => {
       console.log("Live API data already exists. Fetching latest reading to update...");
       const reading = await fetchLiveReading();
       
-      // ANTI-DUPLICATION LOGIC: Update if the timestamp exists, otherwise create
       const existingReading = await SensorData.findOne({ timestamp: reading.timestamp });
       if (existingReading) {
         await SensorData.updateOne({ _id: existingReading._id }, reading);
@@ -180,7 +182,6 @@ app.post("/api/refresh", async (req, res) => {
   } catch (error) { return res.status(502).json({ message: "Failed to refresh air-quality data", error: error.message }); }
 });
 
-// Auto-update data at regular intervals
 const AUTO_UPDATE_INTERVAL = process.env.AUTO_UPDATE_INTERVAL || 3600000;
 const startAutoUpdate = () => {
   setInterval(async () => {
@@ -188,7 +189,6 @@ const startAutoUpdate = () => {
       if (DATA_MODE === "live_api") {
         const reading = await fetchLiveReading();
         
-        // ANTI-DUPLICATION LOGIC: Update if the timestamp exists, otherwise create
         const existingReading = await SensorData.findOne({ timestamp: reading.timestamp });
         if (existingReading) {
           await SensorData.updateOne({ _id: existingReading._id }, reading);
@@ -198,7 +198,6 @@ const startAutoUpdate = () => {
           console.log(`✅ Auto-update: New live reading fetched (${reading.timestamp})`);
         }
 
-        // Clean up old records so the graph doesn't stretch past 24 hours
         const staleReadings = await SensorData.find().sort({ fullDate: -1 }).skip(24).select("_id");
         if (staleReadings.length) await SensorData.deleteMany({ _id: { $in: staleReadings.map(({ _id }) => _id) } });
       }
