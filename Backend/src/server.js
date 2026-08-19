@@ -58,11 +58,27 @@ const fetchLiveReading = async () => {
     const coordinates = `latitude=${OPEN_METEO_LATITUDE}&longitude=${OPEN_METEO_LONGITUDE}`;
     const airQualityUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?${coordinates}&current=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia%2FKolkata`;
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?${coordinates}&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FKolkata`;
+    
+    const fetchOptions = {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "AQM-Dashboard/1.0",
+        "Accept": "application/json",
+      },
+    };
+
     const [airResponse, weatherResponse] = await Promise.all([
-      fetch(airQualityUrl, { signal: controller.signal }),
-      fetch(weatherUrl, { signal: controller.signal }),
+      fetch(airQualityUrl, fetchOptions),
+      fetch(weatherUrl, fetchOptions),
     ]);
-    if (!airResponse.ok || !weatherResponse.ok) throw new Error("Open-Meteo request failed.");
+
+    if (!airResponse.ok || !weatherResponse.ok) {
+      const airError = await airResponse.text().catch(() => "Unknown air response");
+      const weatherError = await weatherResponse.text().catch(() => "Unknown weather response");
+      console.error(`🚨 Open-Meteo Live Fetch Error | Air [${airResponse.status}]: ${airError} | Weather [${weatherResponse.status}]: ${weatherError}`);
+      throw new Error(`Open-Meteo request failed. Air: ${airResponse.status}, Weather: ${weatherResponse.status}`);
+    }
+
     const [air, weather] = await Promise.all([airResponse.json(), weatherResponse.json()]);
     
     const rawTime = air.current?.time || weather.current?.time || new Date().toISOString();
@@ -71,14 +87,25 @@ const fetchLiveReading = async () => {
     const aqiValue = getOptionalNumber(air.current?.us_aqi);
     const aqi = aqiValue === null ? null : Math.round(aqiValue);
     return {
-      timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }), fullDate, aqi,
-      pm25: getOptionalNumber(air.current?.pm2_5), pm10: getOptionalNumber(air.current?.pm10),
-      temperature: getOptionalNumber(weather.current?.temperature_2m), humidity: getOptionalNumber(weather.current?.relative_humidity_2m),
-      co: getOptionalNumber(air.current?.carbon_monoxide), no2: getOptionalNumber(air.current?.nitrogen_dioxide),
-      so2: getOptionalNumber(air.current?.sulphur_dioxide), o3: getOptionalNumber(air.current?.ozone),
-      status: getStatus(aqi), source: "live_api", station: "Open-Meteo air-quality model", location: LIVE_LOCATION,
+      timestamp: fullDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }),
+      fullDate,
+      aqi,
+      pm25: getOptionalNumber(air.current?.pm2_5),
+      pm10: getOptionalNumber(air.current?.pm10),
+      temperature: getOptionalNumber(weather.current?.temperature_2m),
+      humidity: getOptionalNumber(weather.current?.relative_humidity_2m),
+      co: getOptionalNumber(air.current?.carbon_monoxide),
+      no2: getOptionalNumber(air.current?.nitrogen_dioxide),
+      so2: getOptionalNumber(air.current?.sulphur_dioxide),
+      o3: getOptionalNumber(air.current?.ozone),
+      status: getStatus(aqi),
+      source: "live_api",
+      station: "Open-Meteo air-quality model",
+      location: LIVE_LOCATION,
     };
-  } finally { clearTimeout(timeout); }
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 // --- FETCH 24 HOURS OF HISTORICAL LIVE DATA ---
@@ -90,12 +117,26 @@ const seedLiveHistoricalData = async () => {
     const airQualityUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?${coordinates}&hourly=us_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone&past_days=1&forecast_days=1&timezone=Asia%2FKolkata`;
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?${coordinates}&hourly=temperature_2m,relative_humidity_2m&past_days=1&forecast_days=1&timezone=Asia%2FKolkata`;
     
+    const fetchOptions = {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "AQM-Dashboard/1.0",
+        "Accept": "application/json",
+      },
+    };
+
     const [airResponse, weatherResponse] = await Promise.all([
-      fetch(airQualityUrl, { signal: controller.signal }),
-      fetch(weatherUrl, { signal: controller.signal }),
+      fetch(airQualityUrl, fetchOptions),
+      fetch(weatherUrl, fetchOptions),
     ]);
     
-    if (!airResponse.ok || !weatherResponse.ok) throw new Error("Open-Meteo historical request failed.");
+    if (!airResponse.ok || !weatherResponse.ok) {
+      const airError = await airResponse.text().catch(() => "Unknown air response");
+      const weatherError = await weatherResponse.text().catch(() => "Unknown weather response");
+      console.error(`🚨 Open-Meteo Seed Error | Air [${airResponse.status}]: ${airError} | Weather [${weatherResponse.status}]: ${weatherError}`);
+      throw new Error(`Open-Meteo historical request failed. Air: ${airResponse.status}, Weather: ${weatherResponse.status}`);
+    }
+
     const [air, weather] = await Promise.all([airResponse.json(), weatherResponse.json()]);
     
     const timeArray = air.hourly.time;
@@ -161,15 +202,18 @@ const initializeData = async () => {
     }
   } else if (DATA_MODE === "simulated") {
     if (!existingData || existingData.source === "live_api") {
-       await SensorData.deleteMany({});
+      await SensorData.deleteMany({});
     }
   }
 };
 
 app.get("/", (req, res) => res.send("Air Quality Management API is running."));
 app.get("/api/data", async (req, res) => {
-  try { res.json(await SensorData.find().sort({ fullDate: 1 })); }
-  catch (error) { res.status(500).json({ message: "Failed to fetch sensor data", error: error.message }); }
+  try {
+    res.json(await SensorData.find().sort({ fullDate: 1 }));
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch sensor data", error: error.message });
+  }
 });
 
 app.post("/api/refresh", async (req, res) => {
@@ -179,7 +223,9 @@ app.post("/api/refresh", async (req, res) => {
       return res.json(await SensorData.find().sort({ fullDate: 1 }));
     }
     return res.status(400).json({ message: "Refresh logic requires live_api mode" });
-  } catch (error) { return res.status(502).json({ message: "Failed to refresh air-quality data", error: error.message }); }
+  } catch (error) {
+    return res.status(502).json({ message: "Failed to refresh air-quality data", error: error.message });
+  }
 });
 
 const AUTO_UPDATE_INTERVAL = process.env.AUTO_UPDATE_INTERVAL || 3600000;
@@ -199,7 +245,9 @@ const startAutoUpdate = () => {
         }
 
         const staleReadings = await SensorData.find().sort({ fullDate: -1 }).skip(24).select("_id");
-        if (staleReadings.length) await SensorData.deleteMany({ _id: { $in: staleReadings.map(({ _id }) => _id) } });
+        if (staleReadings.length) {
+          await SensorData.deleteMany({ _id: { $in: staleReadings.map(({ _id }) => _id) } });
+        }
       }
     } catch (error) {
       console.error(`❌ Auto-update failed: ${error.message}`);
@@ -207,12 +255,29 @@ const startAutoUpdate = () => {
   }, AUTO_UPDATE_INTERVAL);
 };
 
-mongoose.connect(MONGO_URI).then(async () => {
-  console.log("MongoDB connected");
-  await initializeData();
-  startAutoUpdate();
-  const intervalMs = AUTO_UPDATE_INTERVAL;
-  const intervalMin = (intervalMs / 60000).toFixed(1);
-  console.log(`⏱️ Auto-update interval set to ${intervalMin} minutes`);
-  app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
-}).catch((error) => { console.error("Server startup error:", error.message); process.exit(1); });
+// --- DATABASE & SERVER STARTUP ---
+mongoose
+  .connect(MONGO_URI)
+  .then(async () => {
+    console.log("MongoDB connected");
+
+    // 1. Bind port immediately so Render detects an active service
+    const intervalMs = AUTO_UPDATE_INTERVAL;
+    const intervalMin = (intervalMs / 60000).toFixed(1);
+    console.log(`⏱️ Auto-update interval set to ${intervalMin} minutes`);
+    app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+
+    // 2. Safely attempt initial data seeding without crashing the server if Open-Meteo fails
+    try {
+      await initializeData();
+    } catch (initError) {
+      console.error("⚠️ Initial Open-Meteo sync failed, but server remains active:", initError.message);
+    }
+
+    // 3. Start background interval worker
+    startAutoUpdate();
+  })
+  .catch((error) => {
+    console.error("Fatal MongoDB connection error:", error.message);
+    process.exit(1);
+  });
